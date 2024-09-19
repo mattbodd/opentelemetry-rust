@@ -43,6 +43,22 @@ pub struct Metric {
     pub data: Box<dyn Aggregation>,
 }
 
+impl Metric {
+    /// Create a metric for each data point in the aggregation.
+    pub fn metric_points(&self) -> Vec<Self> {
+        let data_points = self.data.points();
+        data_points
+            .into_iter()
+            .map(|data_point| Metric {
+                name: self.name.clone(),
+                description: self.description.clone(),
+                unit: self.unit.clone(),
+                data: data_point,
+            })
+            .collect()
+    }
+}
+
 /// The store of data reported by an [Instrument].
 ///
 /// It will be one of: [Gauge], [Sum], or [Histogram].
@@ -53,6 +69,8 @@ pub trait Aggregation: fmt::Debug + any::Any + Send + Sync {
     fn as_any(&self) -> &dyn any::Any;
     /// Support downcasting during aggregation
     fn as_mut(&mut self) -> &mut dyn any::Any;
+    /// Create a metric for each data point in an aggregation.
+    fn points(&self) -> Vec<Box<dyn Aggregation>>;
 }
 
 /// A measurement of the current value of an instrument.
@@ -62,12 +80,23 @@ pub struct Gauge<T> {
     pub data_points: Vec<DataPoint<T>>,
 }
 
-impl<T: fmt::Debug + Send + Sync + 'static> Aggregation for Gauge<T> {
+impl<T: Copy + fmt::Debug + Send + Sync + 'static> Aggregation for Gauge<T> {
     fn as_any(&self) -> &dyn any::Any {
         self
     }
     fn as_mut(&mut self) -> &mut dyn any::Any {
         self
+    }
+    fn points(&self) -> Vec<Box<dyn Aggregation>> {
+        let mut points: Vec<Box<dyn Aggregation>> = Vec::new();
+
+        for point in &self.data_points {
+            points.push(Box::new(Self {
+                data_points: vec![point.clone()],
+            }));
+        }
+
+        points
     }
 }
 
@@ -89,6 +118,10 @@ impl<T: fmt::Debug + Send + Sync + 'static> Aggregation for Sum<T> {
     }
     fn as_mut(&mut self) -> &mut dyn any::Any {
         self
+    }
+
+    fn points(&self) -> Vec<Box<dyn Aggregation>> {
+        unimplemented!()
     }
 }
 
@@ -136,6 +169,9 @@ impl<T: fmt::Debug + Send + Sync + 'static> Aggregation for Histogram<T> {
     }
     fn as_mut(&mut self) -> &mut dyn any::Any {
         self
+    }
+    fn points(&self) -> Vec<Box<dyn Aggregation>> {
+        unimplemented!()
     }
 }
 
@@ -203,6 +239,9 @@ impl<T: fmt::Debug + Send + Sync + 'static> Aggregation for ExponentialHistogram
     }
     fn as_mut(&mut self) -> &mut dyn any::Any {
         self
+    }
+    fn points(&self) -> Vec<Box<dyn Aggregation>> {
+        unimplemented!()
     }
 }
 
